@@ -1040,6 +1040,22 @@ static inline void skb_reset_redirect(struct sk_buff *skb)
 #define pre_exit exit
 #endif
 
+#if LINUX_VERSION_CODE < KERNEL_VERSION(4, 3, 0) && !defined(ISRHEL7)
+#define xchg_release xchg
+#endif
+
+#if LINUX_VERSION_CODE < KERNEL_VERSION(3, 14, 0) && !defined(ISRHEL7)
+#include <asm/barrier.h>
+#ifndef smp_load_acquire
+#define smp_load_acquire(p)                                            \
+({                                                                     \
+       typeof(*p) ___p1 = ACCESS_ONCE(*p);                             \
+       smp_mb();                                                       \
+       ___p1;                                                          \
+})
+#endif
+#endif
+
 #if defined(ISUBUNTU1604) || defined(ISRHEL7)
 #include <linux/siphash.h>
 #ifndef _WG_LINUX_SIPHASH_H
