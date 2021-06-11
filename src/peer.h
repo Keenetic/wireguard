@@ -88,4 +88,7 @@ void wg_b64_encode(char *dst, const char *src, size_t len);
 				    ##__VA_ARGS__);                                                     \
 	} while (0)
 
+int wg_peer_init(void);
+void wg_peer_uninit(void);
+
 #endif /* _WG_PEER_H */
