@@ -172,6 +172,23 @@ static netdev_tx_t wg_xmit(struct sk_buff *skb, struct net_device *dev)
 	SWNAT_KA_RESET_MARK(skb);
 #endif
 
+	if (unlikely(skb_linearize_cow(skb)))
+		goto err_peer;
+
+	/*
+	 * Prevent reallocation of packets with total size > 16k
+	 * and OOM pressure
+	 */
+	if (unlikely(skb_end_offset(skb) > 4 * PAGE_SIZE)) {
+		struct sk_buff *new_skb = skb_copy_expand(skb, 0, 0, GFP_ATOMIC);
+
+		if (unlikely(new_skb == NULL))
+			goto err_peer;
+
+		dev_kfree_skb(skb);
+		skb = new_skb;
+	}
+
 	mtu = skb_dst(skb) ? dst_mtu(skb_dst(skb)) : dev->mtu;
 
 	__skb_queue_head_init(&packets);
