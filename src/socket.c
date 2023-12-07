@@ -18,13 +18,14 @@
 #include <net/ipv6.h>
 
 static int send4(struct wg_device *wg, struct sk_buff *skb,
-		 struct endpoint *endpoint, u8 ds, struct dst_cache *cache)
+		 struct endpoint *endpoint, u8 ds, struct dst_cache *cache,
+		 const u32 fwmark)
 {
 	struct flowi4 fl = {
 		.saddr = endpoint->src4.s_addr,
 		.daddr = endpoint->addr4.sin_addr.s_addr,
 		.fl4_dport = endpoint->addr4.sin_port,
-		.flowi4_mark = wg->fwmark,
+		.flowi4_mark = fwmark,
 		.flowi4_proto = IPPROTO_UDP
 	};
 	struct rtable *rt = NULL;
@@ -33,7 +34,7 @@ static int send4(struct wg_device *wg, struct sk_buff *skb,
 
 	skb_mark_not_on_list(skb);
 	skb->dev = wg->dev;
-	skb->mark = wg->fwmark;
+	skb->mark = fwmark;
 
 	rcu_read_lock_bh();
 	sock = rcu_dereference_bh(wg->sock4);
@@ -95,14 +96,15 @@ out:
 }
 
 static int send6(struct wg_device *wg, struct sk_buff *skb,
-		 struct endpoint *endpoint, u8 ds, struct dst_cache *cache)
+		 struct endpoint *endpoint, u8 ds, struct dst_cache *cache,
+		 const u32 fwmark)
 {
 #if IS_ENABLED(CONFIG_IPV6)
 	struct flowi6 fl = {
 		.saddr = endpoint->src6,
 		.daddr = endpoint->addr6.sin6_addr,
 		.fl6_dport = endpoint->addr6.sin6_port,
-		.flowi6_mark = wg->fwmark,
+		.flowi6_mark = fwmark,
 		.flowi6_oif = endpoint->addr6.sin6_scope_id,
 		.flowi6_proto = IPPROTO_UDP
 		/* TODO: addr->sin6_flowinfo */
@@ -113,7 +115,7 @@ static int send6(struct wg_device *wg, struct sk_buff *skb,
 
 	skb_mark_not_on_list(skb);
 	skb->dev = wg->dev;
-	skb->mark = wg->fwmark;
+	skb->mark = fwmark;
 
 	rcu_read_lock_bh();
 	sock = rcu_dereference_bh(wg->sock6);
@@ -168,14 +170,16 @@ int wg_socket_send_skb_to_peer(struct wg_peer *peer, struct sk_buff *skb, u8 ds)
 {
 	size_t skb_len = skb->len;
 	int ret = -EAFNOSUPPORT;
+	const u32 fwmark =
+		(peer->fwmark != 0 ? peer->fwmark : peer->device->fwmark);
 
 	read_lock_bh(&peer->endpoint_lock);
 	if (peer->endpoint.addr.sa_family == AF_INET)
 		ret = send4(peer->device, skb, &peer->endpoint, ds,
-			    &peer->endpoint_cache);
+			    &peer->endpoint_cache, fwmark);
 	else if (peer->endpoint.addr.sa_family == AF_INET6)
 		ret = send6(peer->device, skb, &peer->endpoint, ds,
-			    &peer->endpoint_cache);
+			    &peer->endpoint_cache, fwmark);
 	else
 		dev_kfree_skb(skb);
 	if (likely(!ret))
@@ -221,9 +225,9 @@ int wg_socket_send_buffer_as_reply_to_skb(struct wg_device *wg,
 	skb_put_data(skb, buffer, len);
 
 	if (endpoint.addr.sa_family == AF_INET)
-		ret = send4(wg, skb, &endpoint, 0, NULL);
+		ret = send4(wg, skb, &endpoint, 0, NULL, 0);
 	else if (endpoint.addr.sa_family == AF_INET6)
-		ret = send6(wg, skb, &endpoint, 0, NULL);
+		ret = send6(wg, skb, &endpoint, 0, NULL, 0);
 	/* No other possibilities if the endpoint is valid, which it is,
 	 * as we checked above.
 	 */
