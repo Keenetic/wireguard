@@ -48,7 +48,7 @@ static void wg_expired_retransmit_handshake(struct timer_list *timer)
 			  peer->endpoint.addr.sa_family == AF_INET &&
 			 !ipv4_is_zeronet(peer->endpoint.addr4.sin_addr.s_addr)) ||
 				peer->device->debug) {
-			net_info_peer_ratelimited("%s: handshake for peer \"%s\" (%llu) (%pISpfsc) did not complete after %d attempts, giving up\n",
+			net_info_peer_ratelimited("%s: handshake for peer \"%s\" (%llu) (%pISpfsc) did not complete after %lu attempts, giving up\n",
 				 peer, peer->internal_id, &peer->endpoint.addr, MAX_TIMER_HANDSHAKES + 2);
 		}
 
@@ -70,7 +70,7 @@ static void wg_expired_retransmit_handshake(struct timer_list *timer)
 			  peer->endpoint.addr.sa_family == AF_INET &&
 			 !ipv4_is_zeronet(peer->endpoint.addr4.sin_addr.s_addr)) ||
 				peer->device->debug) {
-			net_info_peer_ratelimited("%s: handshake for peer \"%s\" (%llu) (%pISpfsc) did not complete after %d seconds, retrying (try %d)\n",
+			net_info_peer_ratelimited("%s: handshake for peer \"%s\" (%llu) (%pISpfsc) did not complete after %lu seconds, retrying (try %d)\n",
 				 peer, peer->internal_id, &peer->endpoint.addr, REKEY_TIMEOUT,
 				 peer->timer_handshake_attempts + 1);
 		}
@@ -100,7 +100,7 @@ static void wg_expired_new_handshake(struct timer_list *timer)
 {
 	struct wg_peer *peer = from_timer(peer, timer, timer_new_handshake);
 
-	net_info_peer_ratelimited("%s: retrying handshake with peer \"%s\" (%llu) (%pISpfsc) because we stopped hearing back after %d seconds\n",
+	net_info_peer_ratelimited("%s: retrying handshake with peer \"%s\" (%llu) (%pISpfsc) because we stopped hearing back after %lu seconds\n",
 		 peer, peer->internal_id,
 		 &peer->endpoint.addr, KEEPALIVE_TIMEOUT + REKEY_TIMEOUT);
 	/* We clear the endpoint address src address, in case this is the cause
@@ -132,9 +132,12 @@ static void wg_queued_expired_zero_key_material(struct work_struct *work)
 	struct wg_peer *peer = container_of(work, struct wg_peer,
 					    clear_peer_work);
 
-	net_info_peer_ratelimited("%s: zeroing out all keys for peer \"%s\" (%llu) (%pISpfsc), since we haven't received a new one in %d seconds\n",
-		 peer, peer->internal_id,
-		 &peer->endpoint.addr, REJECT_AFTER_TIME * 3);
+	if (peer->device->debug) {
+		net_info_peer_ratelimited("%s: zeroing out all keys for peer \"%s\" (%llu) (%pISpfsc), since we haven't received a new one in %lu seconds\n",
+			 peer, peer->internal_id,
+			&peer->endpoint.addr, REJECT_AFTER_TIME * 3);
+	}
+
 	wg_noise_handshake_clear(&peer->handshake);
 	wg_noise_keypairs_clear(&peer->keypairs);
 	wg_peer_put(peer);
