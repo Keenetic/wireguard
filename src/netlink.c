@@ -54,7 +54,8 @@ static const struct nla_policy peer_policy[WGPEER_A_MAX + 1] = {
 	[WGPEER_A_TX_BYTES]				= { .type = NLA_U64 },
 	[WGPEER_A_ALLOWEDIPS]				= { .type = NLA_NESTED },
 	[WGPEER_A_FWMARK]				= { .type = NLA_U32 },
-	[WGPEER_A_PROTOCOL_VERSION]			= { .type = NLA_U32 }
+	[WGPEER_A_PROTOCOL_VERSION]			= { .type = NLA_U32 },
+	[WGPEER_A_CLIENT_ID]				= { .type = NLA_U32 }
 };
 
 static const struct nla_policy allowedip_policy[WGALLOWEDIP_A_MAX + 1] = {
@@ -503,6 +504,10 @@ static int set_peer(struct wg_device *wg, struct nlattr **attrs)
 	if (attrs[WGPEER_A_FWMARK]) {
 		peer->fwmark = nla_get_u32(attrs[WGPEER_A_FWMARK]);
 		wg_socket_clear_peer_endpoint_src(peer);
+	}
+
+	if (attrs[WGPEER_A_CLIENT_ID]) {
+		peer->client_id = nla_get_u32(attrs[WGPEER_A_CLIENT_ID]);
 	}
 
 	if (netif_running(wg->dev))

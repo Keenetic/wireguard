@@ -65,6 +65,7 @@ struct wg_peer {
 	struct napi_struct napi;
 	u64 internal_id;
 	u32 fwmark;
+	u32 client_id;
 };
 
 struct wg_peer *wg_peer_create(struct wg_device *wg,

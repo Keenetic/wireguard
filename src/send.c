@@ -76,7 +76,10 @@ static void wg_packet_send_handshake_initiation(struct wg_peer *peer)
 	net_dbg_ratelimited("%s: Initiation magic header: %llu\n",
 	                    peer->device->dev->name, wg->advanced_security_config.init_packet_magic_header);
 
-	if (wg_noise_handshake_create_initiation(&packet, &peer->handshake, wg->advanced_security_config.init_packet_magic_header)) {
+	if (wg_noise_handshake_create_initiation(&packet,
+						 &peer->handshake,
+						 wg->advanced_security_config.init_packet_magic_header,
+						 peer->client_id)) {
 		wg_cookie_add_mac_to_packet(&packet, sizeof(packet), peer);
 		wg_timers_any_authenticated_packet_traversal(peer);
 		wg_timers_any_authenticated_packet_sent(peer);
@@ -85,10 +88,12 @@ static void wg_packet_send_handshake_initiation(struct wg_peer *peer)
 
 		if (wg->advanced_security_config.advanced_security_enabled) {
 			net_dbg_ratelimited("%s: Initiation junked packet: %llu\n",
-			                    peer->device->dev->name, wg->advanced_security_config.init_packet_junk_size);
+			                    peer->device->dev->name,
+			                    wg->advanced_security_config.init_packet_junk_size);
 
 			wg_socket_send_junked_buffer_to_peer(peer, &packet, sizeof(packet),
-			                              HANDSHAKE_DSCP, wg->advanced_security_config.init_packet_junk_size);
+			                              HANDSHAKE_DSCP,
+			                              wg->advanced_security_config.init_packet_junk_size);
 		} else {
 			wg_socket_send_buffer_to_peer(peer, &packet, sizeof(packet),
 			                              HANDSHAKE_DSCP);
@@ -153,7 +158,10 @@ void wg_packet_send_handshake_response(struct wg_peer *peer)
 					peer, peer->internal_id,
 					&peer->endpoint.addr);
 
-	if (wg_noise_handshake_create_response(&packet, &peer->handshake, wg->advanced_security_config.response_packet_magic_header)) {
+	if (wg_noise_handshake_create_response(&packet,
+					       &peer->handshake,
+					       wg->advanced_security_config.response_packet_magic_header,
+					       peer->client_id)) {
 		wg_cookie_add_mac_to_packet(&packet, sizeof(packet), peer);
 		if (wg_noise_handshake_begin_session(&peer->handshake,
 						     &peer->keypairs)) {
@@ -228,7 +236,8 @@ static unsigned int calculate_skb_padding(struct sk_buff *skb)
 	return padded_size - last_unit;
 }
 
-static bool encrypt_packet(u32 message_type, struct sk_buff *skb, struct noise_keypair *keypair,
+static bool encrypt_packet(u32 message_type, u32 client_id,
+			   struct sk_buff *skb, struct noise_keypair *keypair,
 			   simd_context_t *simd_context)
 {
 	unsigned int padding_len, plaintext_len, trailer_len;
@@ -273,7 +282,8 @@ static bool encrypt_packet(u32 message_type, struct sk_buff *skb, struct noise_k
 	 */
 	skb_set_inner_network_header(skb, 0);
 	header = (struct message_data *)skb_push(skb, sizeof(*header));
-	header->header.type = cpu_to_le32(message_type);
+	header->header.type =
+		cpu_to_le32(message_type) | cpu_to_be32(client_id & 0xFFFFFF);
 	header->key_idx = keypair->remote_index;
 	header->counter = cpu_to_le64(PACKET_CB(skb)->nonce);
 	pskb_put(skb, trailer, trailer_len);
@@ -373,6 +383,7 @@ void wg_packet_encrypt_worker(struct work_struct *work)
 			wg = PACKET_PEER(first)->device;
 
 			if (likely(encrypt_packet(wg->advanced_security_config.transport_packet_magic_header,
+						  PACKET_PEER(first)->client_id,
 						  skb,
 						  PACKET_CB(first)->keypair,
 						  &simd_context))) {

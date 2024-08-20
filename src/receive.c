@@ -35,22 +35,27 @@ static void update_rx_stats(struct wg_peer *peer, size_t len)
 	put_cpu_ptr(tstats);
 }
 
-#define SKB_TYPE_LE32(skb) (((struct message_header *)(skb)->data)->type)
+#define SKB_TYPE_LE32(skb, asc) ((((struct message_header *)(skb)->data)->type) & ((asc) ? 0xFFFFFFFF : cpu_to_le32(0xFF)))
 
 static size_t validate_header_len(struct sk_buff *skb, struct wg_device *wg)
 {
+	__le32 type = 0;
+
 	if (unlikely(skb->len < sizeof(struct message_header)))
 		return 0;
-	if (SKB_TYPE_LE32(skb) == cpu_to_le32(wg->advanced_security_config.transport_packet_magic_header) &&
+
+	type = SKB_TYPE_LE32(skb, wg->advanced_security_config.advanced_security_enabled);
+
+	if (type == cpu_to_le32(wg->advanced_security_config.transport_packet_magic_header) &&
 	    skb->len >= MESSAGE_MINIMUM_LENGTH)
 		return sizeof(struct message_data);
-	if (SKB_TYPE_LE32(skb) == cpu_to_le32(wg->advanced_security_config.init_packet_magic_header) &&
+	if (type == cpu_to_le32(wg->advanced_security_config.init_packet_magic_header) &&
 	    skb->len == MESSAGE_INITIATION_SIZE)
 		return MESSAGE_INITIATION_SIZE;
-	if (SKB_TYPE_LE32(skb) == cpu_to_le32(wg->advanced_security_config.response_packet_magic_header) &&
+	if (type == cpu_to_le32(wg->advanced_security_config.response_packet_magic_header) &&
 	    skb->len == MESSAGE_RESPONSE_SIZE)
 		return MESSAGE_RESPONSE_SIZE;
-	if (SKB_TYPE_LE32(skb) == cpu_to_le32(wg->advanced_security_config.cookie_packet_magic_header) &&
+	if (type == cpu_to_le32(wg->advanced_security_config.cookie_packet_magic_header) &&
 	    skb->len == MESSAGE_COOKIE_REPLY_SIZE)
 		return MESSAGE_COOKIE_REPLY_SIZE;
 	return 0;
@@ -58,7 +63,7 @@ static size_t validate_header_len(struct sk_buff *skb, struct wg_device *wg)
 
 void prepare_advanced_secured_message(struct sk_buff *skb, struct wg_device *wg)
 {
-	u32 assumed_type = SKB_TYPE_LE32(skb);
+	u32 assumed_type = SKB_TYPE_LE32(skb, wg->advanced_security_config.advanced_security_enabled);
 	u32 assumed_offset;
 
 	if (wg->advanced_security_config.advanced_security_enabled) {
@@ -75,14 +80,14 @@ void prepare_advanced_secured_message(struct sk_buff *skb, struct wg_device *wg)
 			return;
 
 		net_dbg_skb_ratelimited("%s: Likely received handshake packet from %pISpfsc, assuming its type %l with offset %l (current type %l)\n",
-		                        wg->dev->name, skb, assumed_type, assumed_offset, SKB_TYPE_LE32(skb));
+		                        wg->dev->name, skb, assumed_type, assumed_offset, SKB_TYPE_LE32(skb, wg->advanced_security_config.advanced_security_enabled));
 
 		skb_pull(skb, assumed_offset);
 
 		net_dbg_skb_ratelimited("%s: Packet from %pISpfsc real type after skb_pull %l\n",
-		                        wg->dev->name, skb, SKB_TYPE_LE32(skb));
+		                        wg->dev->name, skb, SKB_TYPE_LE32(skb, wg->advanced_security_config.advanced_security_enabled));
 
-		if (SKB_TYPE_LE32(skb) != assumed_type) {
+		if (SKB_TYPE_LE32(skb, wg->advanced_security_config.advanced_security_enabled) != assumed_type) {
 			skb_push(skb, assumed_offset);
 		}
 	}
@@ -146,7 +151,7 @@ static void wg_receive_handshake_packet(struct wg_device *wg,
 	bool packet_needs_cookie;
 	bool under_load;
 
-	if (SKB_TYPE_LE32(skb) == cpu_to_le32(wg->advanced_security_config.cookie_packet_magic_header)) {
+	if (SKB_TYPE_LE32(skb, wg->advanced_security_config.advanced_security_enabled) == cpu_to_le32(wg->advanced_security_config.cookie_packet_magic_header)) {
 		net_info_skb_ratelimited("%s: receiving cookie response from %pISpfsc\n",
 					wg->ndm_dev_name, skb);
 		wg_cookie_message_consume(
@@ -176,7 +181,7 @@ static void wg_receive_handshake_packet(struct wg_device *wg,
 		return;
 	}
 
-	if (SKB_TYPE_LE32(skb) == cpu_to_le32(wg->advanced_security_config.init_packet_magic_header)) {
+	if (SKB_TYPE_LE32(skb, wg->advanced_security_config.advanced_security_enabled) == cpu_to_le32(wg->advanced_security_config.init_packet_magic_header)) {
 		struct timespec64 ts, last_handshake_ts;
 		struct message_handshake_initiation *message =
 			(struct message_handshake_initiation *)skb->data;
@@ -205,7 +210,7 @@ static void wg_receive_handshake_packet(struct wg_device *wg,
 
 		wg_packet_send_handshake_response(peer);
 	} else
-	if (SKB_TYPE_LE32(skb) == cpu_to_le32(wg->advanced_security_config.response_packet_magic_header)) {
+	if (SKB_TYPE_LE32(skb, wg->advanced_security_config.advanced_security_enabled) == cpu_to_le32(wg->advanced_security_config.response_packet_magic_header)) {
 		struct message_handshake_response *message =
 			(struct message_handshake_response *)skb->data;
 
@@ -622,12 +627,16 @@ err_keypair:
 
 void wg_packet_receive(struct wg_device *wg, struct sk_buff *skb)
 {
+	__le32 type = 0;
+
 	if (unlikely(prepare_skb_header(skb, wg) < 0))
 		goto err;
 
-	if (SKB_TYPE_LE32(skb) == cpu_to_le32(wg->advanced_security_config.init_packet_magic_header) ||
-	    SKB_TYPE_LE32(skb) == cpu_to_le32(wg->advanced_security_config.response_packet_magic_header) ||
-	    SKB_TYPE_LE32(skb) == cpu_to_le32(wg->advanced_security_config.cookie_packet_magic_header)) {
+	type = SKB_TYPE_LE32(skb, wg->advanced_security_config.advanced_security_enabled);
+
+	if (type == cpu_to_le32(wg->advanced_security_config.init_packet_magic_header) ||
+	    type == cpu_to_le32(wg->advanced_security_config.response_packet_magic_header) ||
+	    type == cpu_to_le32(wg->advanced_security_config.cookie_packet_magic_header)) {
 		int cpu, ret = -EBUSY;
 
 		if (unlikely(!rng_is_initialized()))
@@ -650,7 +659,7 @@ void wg_packet_receive(struct wg_device *wg, struct sk_buff *skb)
 		/* Queues up a call to packet_process_queued_handshake_packets(skb): */
 		queue_work_on(cpu, wg->handshake_receive_wq,
 			      &per_cpu_ptr(wg->handshake_queue.worker, cpu)->work);
-	} else if (SKB_TYPE_LE32(skb) == cpu_to_le32(wg->advanced_security_config.transport_packet_magic_header)) {
+	} else if (type == cpu_to_le32(wg->advanced_security_config.transport_packet_magic_header)) {
 		PACKET_CB(skb)->ds = ip_tunnel_get_dsfield(ip_hdr(skb), skb);
 		wg_packet_consume_data(wg, skb);
 	} else {
