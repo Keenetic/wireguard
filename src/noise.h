@@ -119,16 +119,14 @@ void wg_noise_precompute_static_static(struct wg_peer *peer);
 bool
 wg_noise_handshake_create_initiation(struct message_handshake_initiation *dst,
 				     struct noise_handshake *handshake,
-				     u32 message_type,
-				     u32 client_id);
+				     u32 message_type);
 struct wg_peer *
 wg_noise_handshake_consume_initiation(struct message_handshake_initiation *src,
 				      struct wg_device *wg);
 
 bool wg_noise_handshake_create_response(struct message_handshake_response *dst,
 					struct noise_handshake *handshake,
-					u32 message_type,
-					u32 client_id);
+					u32 message_type);
 struct wg_peer *
 wg_noise_handshake_consume_response(struct message_handshake_response *src,
 				    struct wg_device *wg);

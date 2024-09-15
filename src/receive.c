@@ -36,6 +36,7 @@ static void update_rx_stats(struct wg_peer *peer, size_t len)
 }
 
 #define SKB_TYPE_LE32(skb, asc) ((((struct message_header *)(skb)->data)->type) & ((asc) ? 0xFFFFFFFF : cpu_to_le32(0xFF)))
+#define SKB_CLEAR_TYPE(skb, asc) ((((struct message_header *)(skb)->data)->type) &= ((asc) ? 0xFFFFFFFF : cpu_to_le32(0xFF)))
 
 static size_t validate_header_len(struct sk_buff *skb, struct wg_device *wg)
 {
@@ -633,6 +634,7 @@ void wg_packet_receive(struct wg_device *wg, struct sk_buff *skb)
 		goto err;
 
 	type = SKB_TYPE_LE32(skb, wg->advanced_security_config.advanced_security_enabled);
+	SKB_CLEAR_TYPE(skb, wg->advanced_security_config.advanced_security_enabled);
 
 	if (type == cpu_to_le32(wg->advanced_security_config.init_packet_magic_header) ||
 	    type == cpu_to_le32(wg->advanced_security_config.response_packet_magic_header) ||

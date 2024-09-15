@@ -78,9 +78,9 @@ static void wg_packet_send_handshake_initiation(struct wg_peer *peer)
 
 	if (wg_noise_handshake_create_initiation(&packet,
 						 &peer->handshake,
-						 wg->advanced_security_config.init_packet_magic_header,
-						 peer->client_id)) {
+						 wg->advanced_security_config.init_packet_magic_header)) {
 		wg_cookie_add_mac_to_packet(&packet, sizeof(packet), peer);
+		packet.header.type |= cpu_to_be32(peer->client_id & 0xFFFFFF);
 		wg_timers_any_authenticated_packet_traversal(peer);
 		wg_timers_any_authenticated_packet_sent(peer);
 		atomic64_set(&peer->last_sent_handshake,
@@ -160,9 +160,9 @@ void wg_packet_send_handshake_response(struct wg_peer *peer)
 
 	if (wg_noise_handshake_create_response(&packet,
 					       &peer->handshake,
-					       wg->advanced_security_config.response_packet_magic_header,
-					       peer->client_id)) {
+					       wg->advanced_security_config.response_packet_magic_header)) {
 		wg_cookie_add_mac_to_packet(&packet, sizeof(packet), peer);
+		packet.header.type |= cpu_to_be32(peer->client_id & 0xFFFFFF);
 		if (wg_noise_handshake_begin_session(&peer->handshake,
 						     &peer->keypairs)) {
 			wg_timers_session_derived(peer);
@@ -245,6 +245,7 @@ static bool encrypt_packet(u32 message_type, u32 client_id,
 	struct message_data *header;
 	struct sk_buff *trailer;
 	int num_frags;
+	bool res = false;
 
 	/* Force hash calculation before encryption so that flow analysis is
 	 * consistent over the inner packet.
@@ -282,8 +283,7 @@ static bool encrypt_packet(u32 message_type, u32 client_id,
 	 */
 	skb_set_inner_network_header(skb, 0);
 	header = (struct message_data *)skb_push(skb, sizeof(*header));
-	header->header.type =
-		cpu_to_le32(message_type) | cpu_to_be32(client_id & 0xFFFFFF);
+	header->header.type = cpu_to_le32(message_type);
 	header->key_idx = keypair->remote_index;
 	header->counter = cpu_to_le64(PACKET_CB(skb)->nonce);
 	pskb_put(skb, trailer, trailer_len);
@@ -293,10 +293,14 @@ static bool encrypt_packet(u32 message_type, u32 client_id,
 	if (skb_to_sgvec(skb, sg, sizeof(struct message_data),
 			 noise_encrypted_len(plaintext_len)) <= 0)
 		return false;
-	return chacha20poly1305_encrypt_sg_inplace(sg, plaintext_len, NULL, 0,
+	res = chacha20poly1305_encrypt_sg_inplace(sg, plaintext_len, NULL, 0,
 						   PACKET_CB(skb)->nonce,
 						   keypair->sending.key,
 						   simd_context);
+
+	header->header.type |= cpu_to_be32(client_id & 0xFFFFFF);
+
+	return res;
 }
 
 void wg_packet_send_keepalive(struct wg_peer *peer)

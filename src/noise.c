@@ -487,8 +487,7 @@ static void tai64n_now(u8 output[NOISE_TIMESTAMP_LEN])
 bool
 wg_noise_handshake_create_initiation(struct message_handshake_initiation *dst,
 				     struct noise_handshake *handshake,
-				     u32 message_type,
-				     u32 client_id)
+				     u32 message_type)
 {
 	u8 timestamp[NOISE_TIMESTAMP_LEN];
 	u8 key[NOISE_SYMMETRIC_KEY_LEN];
@@ -505,8 +504,7 @@ wg_noise_handshake_create_initiation(struct message_handshake_initiation *dst,
 	if (unlikely(!handshake->static_identity->has_identity))
 		goto out;
 
-	dst->header.type =
-		cpu_to_le32(message_type) | cpu_to_be32(client_id & 0xFFFFFF);
+	dst->header.type = cpu_to_le32(message_type);
 
 	handshake_init(handshake->chaining_key, handshake->hash,
 		       handshake->remote_static);
@@ -640,8 +638,7 @@ out:
 
 bool wg_noise_handshake_create_response(struct message_handshake_response *dst,
 					struct noise_handshake *handshake,
-					u32 message_type,
-					u32 client_id)
+					u32 message_type)
 {
 	u8 key[NOISE_SYMMETRIC_KEY_LEN];
 	bool ret = false;
@@ -657,8 +654,7 @@ bool wg_noise_handshake_create_response(struct message_handshake_response *dst,
 	if (handshake->state != HANDSHAKE_CONSUMED_INITIATION)
 		goto out;
 
-	dst->header.type =
-		cpu_to_le32(message_type) | cpu_to_be32(client_id & 0xFFFFFF);
+	dst->header.type = cpu_to_le32(message_type);
 	dst->receiver_index = handshake->remote_index;
 
 	/* e */
