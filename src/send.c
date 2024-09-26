@@ -52,7 +52,7 @@ static void wg_packet_send_handshake_initiation(struct wg_peer *peer)
 		junk_packet_count = wg->advanced_security_config.junk_packet_count;
 		buffer = kzalloc(wg->advanced_security_config.junk_packet_max_size, GFP_KERNEL);
 
-		net_dbg_ratelimited("%s: Sending %llu junk packets to peer %llu (%pISpfsc)\n",
+		net_dbg_ratelimited("%s: Sending %d junk packets to peer %llu (%pISpfsc)\n",
 		                    peer->device->dev->name, junk_packet_count, peer->internal_id,
 		                    &peer->endpoint.addr);
 
@@ -61,7 +61,7 @@ static void wg_packet_send_handshake_initiation(struct wg_peer *peer)
 					wg->advanced_security_config.junk_packet_min_size,
 					wg->advanced_security_config.junk_packet_max_size);
 
-			net_dbg_ratelimited("%s: Sending %llu size junk packet to peer %llu (%pISpfsc)\n",
+			net_dbg_ratelimited("%s: Sending %d size junk packet to peer %llu (%pISpfsc)\n",
 			                    peer->device->dev->name, junk_packet_size, peer->internal_id,
 			                    &peer->endpoint.addr);
 
@@ -73,21 +73,22 @@ static void wg_packet_send_handshake_initiation(struct wg_peer *peer)
 		kfree(buffer);
 	}
 
-	net_dbg_ratelimited("%s: Initiation magic header: %llu\n",
+	net_dbg_ratelimited("%s: Initiation magic header: %d\n",
 	                    peer->device->dev->name, wg->advanced_security_config.init_packet_magic_header);
 
 	if (wg_noise_handshake_create_initiation(&packet,
 						 &peer->handshake,
 						 wg->advanced_security_config.init_packet_magic_header)) {
 		wg_cookie_add_mac_to_packet(&packet, sizeof(packet), peer);
-		packet.header.type |= cpu_to_be32(peer->client_id & 0xFFFFFF);
+		if (wg->advanced_security_config.init_packet_magic_header <= 0xFF)
+			packet.header.type |= cpu_to_be32(peer->client_id & 0xFFFFFF);
 		wg_timers_any_authenticated_packet_traversal(peer);
 		wg_timers_any_authenticated_packet_sent(peer);
 		atomic64_set(&peer->last_sent_handshake,
 			     ktime_get_coarse_boottime_ns());
 
 		if (wg->advanced_security_config.advanced_security_enabled) {
-			net_dbg_ratelimited("%s: Initiation junked packet: %llu\n",
+			net_dbg_ratelimited("%s: Initiation junked packet: %d\n",
 			                    peer->device->dev->name,
 			                    wg->advanced_security_config.init_packet_junk_size);
 
@@ -162,7 +163,8 @@ void wg_packet_send_handshake_response(struct wg_peer *peer)
 					       &peer->handshake,
 					       wg->advanced_security_config.response_packet_magic_header)) {
 		wg_cookie_add_mac_to_packet(&packet, sizeof(packet), peer);
-		packet.header.type |= cpu_to_be32(peer->client_id & 0xFFFFFF);
+		if (wg->advanced_security_config.response_packet_magic_header <= 0xFF)
+			packet.header.type |= cpu_to_be32(peer->client_id & 0xFFFFFF);
 		if (wg_noise_handshake_begin_session(&peer->handshake,
 						     &peer->keypairs)) {
 			wg_timers_session_derived(peer);
@@ -298,7 +300,8 @@ static bool encrypt_packet(u32 message_type, u32 client_id,
 						   keypair->sending.key,
 						   simd_context);
 
-	header->header.type |= cpu_to_be32(client_id & 0xFFFFFF);
+	if (message_type <= 0xFF)
+		header->header.type |= cpu_to_be32(client_id & 0xFFFFFF);
 
 	return res;
 }
