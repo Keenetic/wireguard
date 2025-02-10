@@ -527,7 +527,7 @@ int wg_device_handle_post_config(struct net_device *dev, struct asc_config *asc)
 		goto out;
 
 	if (asc->junk_packet_count < 0) {
-		net_dbg_ratelimited("%s: JunkPacketCount should be non negative\n", dev->name);
+		net_info_ratelimited("%s: JunkPacketCount should be non negative\n", dev->name);
 		ret = -EINVAL;
 	}
 
@@ -546,12 +546,12 @@ int wg_device_handle_post_config(struct net_device *dev, struct asc_config *asc)
 		wg->advanced_security_config.junk_packet_min_size = 0;
 		wg->advanced_security_config.junk_packet_max_size = 1;
 
-		net_dbg_ratelimited("%s: JunkPacketMaxSize: %d; should be smaller than maxSegmentSize: %d\n",
+		net_info_ratelimited("%s: JunkPacketMaxSize: %d; should be smaller than maxSegmentSize: %d\n",
 							dev->name, asc->junk_packet_max_size,
 							MESSAGE_MAX_SIZE);
 		ret = -EINVAL;
 	} else if (asc->junk_packet_max_size < asc->junk_packet_min_size) {
-		net_dbg_ratelimited("%s: maxSize: %d; should be greater than minSize: %d\n",
+		net_info_ratelimited("%s: maxSize: %d; should be greater than minSize: %d\n",
 							dev->name, asc->junk_packet_max_size,
 							asc->junk_packet_min_size);
 		ret = -EINVAL;
@@ -562,7 +562,7 @@ int wg_device_handle_post_config(struct net_device *dev, struct asc_config *asc)
 		a_sec_on = true;
 
 	if (asc->init_packet_junk_size + MESSAGE_INITIATION_SIZE >= MESSAGE_MAX_SIZE) {
-		net_dbg_ratelimited("%s: init header size (%d) + junkSize (%d) should be smaller than maxSegmentSize: %d\n",
+		net_info_ratelimited("%s: init header size (%d) + junkSize (%d) should be smaller than maxSegmentSize: %d\n",
 		                    dev->name, MESSAGE_INITIATION_SIZE,
 							asc->init_packet_junk_size, MESSAGE_MAX_SIZE);
 		ret = -EINVAL;
@@ -573,7 +573,7 @@ int wg_device_handle_post_config(struct net_device *dev, struct asc_config *asc)
 		a_sec_on = true;
 
 	if (asc->response_packet_junk_size + MESSAGE_RESPONSE_SIZE >= MESSAGE_MAX_SIZE) {
-		net_dbg_ratelimited("%s: response header size (%d) + junkSize (%d) should be smaller than maxSegmentSize: %d\n",
+		net_info_ratelimited("%s: response header size (%d) + junkSize (%d) should be smaller than maxSegmentSize: %d\n",
 		                    dev->name, MESSAGE_RESPONSE_SIZE,
 		                    asc->response_packet_junk_size, MESSAGE_MAX_SIZE);
 		ret = -EINVAL;
@@ -609,7 +609,7 @@ int wg_device_handle_post_config(struct net_device *dev, struct asc_config *asc)
 			wg->advanced_security_config.response_packet_magic_header == wg->advanced_security_config.cookie_packet_magic_header ||
 			wg->advanced_security_config.response_packet_magic_header == wg->advanced_security_config.transport_packet_magic_header ||
 			wg->advanced_security_config.cookie_packet_magic_header == wg->advanced_security_config.transport_packet_magic_header) {
-		net_dbg_ratelimited("%s: magic headers should differ; got: init:%d; recv:%d; unde:%d; tran:%d\n",
+		net_info_ratelimited("%s: magic headers should differ; got: init:%d; recv:%d; unde:%d; tran:%d\n",
 		                    dev->name,
 							wg->advanced_security_config.init_packet_magic_header,
 		                    wg->advanced_security_config.response_packet_magic_header,
@@ -620,7 +620,7 @@ int wg_device_handle_post_config(struct net_device *dev, struct asc_config *asc)
 
 	if (MESSAGE_INITIATION_SIZE + wg->advanced_security_config.init_packet_junk_size ==
 		MESSAGE_RESPONSE_SIZE + wg->advanced_security_config.response_packet_junk_size) {
-		net_dbg_ratelimited("%s: new init size:%d; and new response size:%d; should differ\n",
+		net_info_ratelimited("%s: new init size:%d; and new response size:%d; should differ\n",
 		                    dev->name,
 		                    MESSAGE_INITIATION_SIZE + asc->init_packet_junk_size,
 		                    MESSAGE_RESPONSE_SIZE + asc->response_packet_junk_size);
