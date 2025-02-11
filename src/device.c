@@ -517,18 +517,29 @@ void wg_device_uninit(void)
 	rcu_barrier();
 }
 
+static inline void wg_device_rollback(struct net_device *dev)
+{
+	struct wg_device *wg = netdev_priv(dev);
+
+	memset(&wg->advanced_security_config, 0, sizeof(wg->advanced_security_config));
+}
+
 int wg_device_handle_post_config(struct net_device *dev, struct asc_config *asc)
 {
 	struct wg_device *wg = netdev_priv(dev);
 	bool a_sec_on = false;
 	int ret = 0;
 
-	if (!asc->advanced_security_enabled)
+	if (!asc->advanced_security_enabled) {
+		wg_device_rollback(dev);
 		goto out;
+	}
 
 	if (asc->junk_packet_count < 0) {
 		net_info_ratelimited("%s: JunkPacketCount should be non negative\n", dev->name);
 		ret = -EINVAL;
+		wg_device_rollback(dev);
+		goto out;
 	}
 
 	wg->advanced_security_config.junk_packet_count = asc->junk_packet_count;
@@ -550,13 +561,20 @@ int wg_device_handle_post_config(struct net_device *dev, struct asc_config *asc)
 							dev->name, asc->junk_packet_max_size,
 							MESSAGE_MAX_SIZE);
 		ret = -EINVAL;
-	} else if (asc->junk_packet_max_size < asc->junk_packet_min_size) {
+		wg_device_rollback(dev);
+		goto out;
+	}
+
+	if (asc->junk_packet_max_size < asc->junk_packet_min_size) {
 		net_info_ratelimited("%s: maxSize: %d; should be greater than minSize: %d\n",
 							dev->name, asc->junk_packet_max_size,
 							asc->junk_packet_min_size);
 		ret = -EINVAL;
-	} else
-		wg->advanced_security_config.junk_packet_max_size = asc->junk_packet_max_size;
+		wg_device_rollback(dev);
+		goto out;
+	}
+
+	wg->advanced_security_config.junk_packet_max_size = asc->junk_packet_max_size;
 
 	if (asc->junk_packet_max_size != 0)
 		a_sec_on = true;
@@ -566,8 +584,11 @@ int wg_device_handle_post_config(struct net_device *dev, struct asc_config *asc)
 		                    dev->name, MESSAGE_INITIATION_SIZE,
 							asc->init_packet_junk_size, MESSAGE_MAX_SIZE);
 		ret = -EINVAL;
-	} else
-		wg->advanced_security_config.init_packet_junk_size = asc->init_packet_junk_size;
+		wg_device_rollback(dev);
+		goto out;
+	}
+
+	wg->advanced_security_config.init_packet_junk_size = asc->init_packet_junk_size;
 
 	if (asc->init_packet_junk_size != 0)
 		a_sec_on = true;
@@ -577,8 +598,11 @@ int wg_device_handle_post_config(struct net_device *dev, struct asc_config *asc)
 		                    dev->name, MESSAGE_RESPONSE_SIZE,
 		                    asc->response_packet_junk_size, MESSAGE_MAX_SIZE);
 		ret = -EINVAL;
-	} else
-		wg->advanced_security_config.response_packet_junk_size = asc->response_packet_junk_size;
+		wg_device_rollback(dev);
+		goto out;
+	}
+
+	wg->advanced_security_config.response_packet_junk_size = asc->response_packet_junk_size;
 
 	if (asc->response_packet_junk_size != 0)
 		a_sec_on = true;
@@ -616,6 +640,8 @@ int wg_device_handle_post_config(struct net_device *dev, struct asc_config *asc)
 							wg->advanced_security_config.cookie_packet_magic_header,
 							wg->advanced_security_config.transport_packet_magic_header);
 		ret = -EINVAL;
+		wg_device_rollback(dev);
+		goto out;
 	}
 
 	if (MESSAGE_INITIATION_SIZE + wg->advanced_security_config.init_packet_junk_size ==
@@ -625,9 +651,15 @@ int wg_device_handle_post_config(struct net_device *dev, struct asc_config *asc)
 		                    MESSAGE_INITIATION_SIZE + asc->init_packet_junk_size,
 		                    MESSAGE_RESPONSE_SIZE + asc->response_packet_junk_size);
 		ret = -EINVAL;
+		wg_device_rollback(dev);
+		goto out;
 	}
 
-	wg->advanced_security_config.advanced_security_enabled = a_sec_on;
+	if (a_sec_on)
+		wg->advanced_security_config.advanced_security_enabled = a_sec_on;
+	else
+		wg_device_rollback(dev);
+
 out:
 	return ret;
 }
