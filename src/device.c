@@ -522,6 +522,11 @@ static inline void wg_device_rollback(struct net_device *dev)
 	struct wg_device *wg = netdev_priv(dev);
 
 	memset(&wg->advanced_security_config, 0, sizeof(wg->advanced_security_config));
+
+	wg->advanced_security_config.init_packet_magic_header = MESSAGE_HANDSHAKE_INITIATION;
+	wg->advanced_security_config.response_packet_magic_header = MESSAGE_HANDSHAKE_RESPONSE;
+	wg->advanced_security_config.cookie_packet_magic_header = MESSAGE_HANDSHAKE_COOKIE;
+	wg->advanced_security_config.transport_packet_magic_header = MESSAGE_DATA;
 }
 
 int wg_device_handle_post_config(struct net_device *dev, struct asc_config *asc)
